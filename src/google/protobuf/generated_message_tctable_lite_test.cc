@@ -44,6 +44,183 @@ namespace {
 using ::testing::Eq;
 using ::testing::Not;
 
+void AppendVarint(uint64_t value, std::string* s) {
+  while (value > 0x7F) {
+    s->push_back(static_cast<char>(0x80 + (value & 0x7F)));
+    value >>= 7;
+  };
+  s->push_back(static_cast<char>(value));
+}
+
+TcFieldData XorPtr(TcFieldData tfd, const char* ptr) {
+  tfd.data ^= 0xFF & ptr[0];
+  tfd.data ^= (0xFF & ptr[1]) << 8;
+  return tfd;
+}
+
+const char* FastParserGaveUp(::google::protobuf::MessageLite*, const char*,
+                             ::google::protobuf::internal::ParseContext*,
+                             ::google::protobuf::internal::TcFieldData,
+                             const ::google::protobuf::internal::TcParseTableBase*,
+                             uint64_t) {
+  return nullptr;
+}
+
+TEST(FastVarints, NameHere) {
+  constexpr size_t kHasBitsOffset = 4;
+  constexpr size_t kHasBitIndex = 0;
+  constexpr size_t kFieldOffset = 24;
+
+  // clang-format on
+  const TcParseTable<0, 1, 0, 0, 2> parse_table = {
+      {
+          kHasBitsOffset,  //
+          0, 0, 0,         // no _extensions_
+          1, 0,            // max_field_number, fast_idx_mask
+          offsetof(decltype(parse_table), field_lookup_table),
+          0xFFFFFFFF - 1,  // skipmap
+          offsetof(decltype(parse_table), field_entries),
+          1,                                             // num_field_entries
+          0,                                             // num_aux_entries
+          offsetof(decltype(parse_table), field_names),  // no aux_entries
+          nullptr,                                       // default instance
+          FastParserGaveUp,                              // fallback
+      },
+      // Fast Table:
+      {{
+          // optional int32 field = 1;
+          {TcParser::SingularVarintNoZag1<::uint32_t, kFieldOffset,
+                                          kHasBitIndex>(),
+           {/* coded_tag= */ 8, kHasBitIndex, /* aux_idx= */ 0, kFieldOffset}},
+      }},
+      // Field Lookup Table:
+      {{65535, 65535}},
+      // Field Entries:
+      {{
+          // This is set to kFkNone to force MiniParse to call the fallback
+          {kFieldOffset, kHasBitsOffset + 0, 0, (field_layout::kFkNone)},
+      }},
+      // no aux_entries
+      {{}},
+  };
+  // clang-format on
+  uint64_t hasbits;
+
+  std::string serialized;
+  constexpr char kDND = 0x5A;  // "Do Not Disturb"
+  for (int size : {8, 32, 64, -8, -32, -64}) {
+    auto next = [](uint64_t i) {
+      // if i + 1 is a power of two, return that.
+      if ((i & (i + 1)) == 0) return i + 1;
+      // otherwise, i is already a power of two, so advance to one less than the
+      // next power of two.
+      return i + (i - 1);
+    };
+    for (uint64_t i = 0; i + 1 != 0; i = next(i)) {
+      char fake_msg[64] = {
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+          kDND, kDND, kDND, kDND, kDND, kDND, kDND, kDND,  //
+      };
+      serialized.clear();
+      hasbits = 0;
+      AppendVarint(1 * 8, &serialized);  // Field 1
+      AppendVarint(i, &serialized);
+      const char* ptr = nullptr;
+      const char* end_ptr = nullptr;
+      ParseContext ctx(io::CodedInputStream::GetDefaultRecursionLimit(),
+                       /* aliasing= */ false, &ptr, serialized);
+#if 0  // FOR_DEBUGGING
+      GOOGLE_ABSL_LOG(ERROR) << "size=" << size << " i=" << i << " ptr points to "  //
+                      << +ptr[0] << "," << +ptr[1] << ","                    //
+                      << +ptr[2] << "," << +ptr[3] << ","                    //
+                      << +ptr[4] << "," << +ptr[5] << ","                    //
+                      << +ptr[6] << "," << +ptr[7] << ","                    //
+                      << +ptr[8] << "," << +ptr[9] << "," << +ptr[10] << "\n";
+#endif
+      TailCallParseFunc fn = nullptr;
+      switch (size) {
+        case 8:
+          fn = &TcParser::FastV8S1;
+          break;
+        case -8:
+          fn = &TcParser::FastTV8S1<kFieldOffset, kHasBitIndex>;
+          break;
+        case 32:
+          fn = &TcParser::FastV32S1;
+          break;
+        case -32:
+          fn = &TcParser::FastTV32S1<uint32_t, kFieldOffset, kHasBitIndex>;
+          break;
+        case 64:
+          fn = &TcParser::FastV64S1;
+          break;
+        case -64:
+          fn = &TcParser::FastTV64S1<uint64_t, kFieldOffset, kHasBitIndex>;
+          break;
+      }
+      fake_msg[kHasBitsOffset] = 0;
+      end_ptr = fn(reinterpret_cast<MessageLite*>(fake_msg), ptr, &ctx,
+                   XorPtr(parse_table.fast_entries[0].bits, ptr),
+                   &parse_table.header, hasbits);
+      switch (size) {
+        case -8:
+        case 8: {
+          if (end_ptr == nullptr) {
+            // If end_ptr is nullptr, that means the FastParser gave up and
+            // tried to pass control to MiniParse.... which is expected anytime
+            // we encounter something other than 0 or 1 encodings.  (Since
+            // FastV8S1 is only used for `bool` fields.)
+            EXPECT_NE(i, true);
+            EXPECT_NE(i, false);
+            continue;
+          }
+          ASSERT_EQ(end_ptr - ptr, serialized.size());
+
+          uint8_t actual_field = 0;
+          memcpy(&actual_field, &fake_msg[kFieldOffset], sizeof(actual_field));
+          memset(&fake_msg[kFieldOffset], kDND, sizeof(actual_field));
+          EXPECT_EQ(actual_field, static_cast<decltype(actual_field)>(i))  //
+              << " hex: " << absl::StrCat(absl::Hex(actual_field));
+        }; break;
+        case -32:
+        case 32: {
+          ASSERT_EQ(end_ptr - ptr, serialized.size());
+
+          uint32_t actual_field = 0;
+          memcpy(&actual_field, &fake_msg[kFieldOffset], sizeof(actual_field));
+          memset(&fake_msg[kFieldOffset], kDND, sizeof(actual_field));
+          EXPECT_EQ(actual_field, static_cast<decltype(actual_field)>(i))  //
+              << " hex: " << absl::StrCat(absl::Hex(actual_field));
+        }; break;
+        case -64:
+        case 64: {
+          ASSERT_EQ(end_ptr - ptr, serialized.size());
+
+          uint64_t actual_field = 0;
+          memcpy(&actual_field, &fake_msg[kFieldOffset], sizeof(actual_field));
+          memset(&fake_msg[kFieldOffset], kDND, sizeof(actual_field));
+          EXPECT_EQ(actual_field, static_cast<decltype(actual_field)>(i))  //
+              << " hex: " << absl::StrCat(absl::Hex(actual_field));
+        }; break;
+      }
+      EXPECT_EQ(fake_msg[kHasBitsOffset], 1 << kHasBitIndex);
+      fake_msg[kHasBitsOffset] = kDND;
+
+      int offset = 0;
+      for (char ch : fake_msg) {
+        EXPECT_EQ(ch, kDND) << " corruption of message at offset " << offset;
+        ++offset;
+      }
+    }
+  }
+}
+
 MATCHER_P3(IsEntryForFieldNum, table, field_num, field_numbers_table,
            absl::StrCat(negation ? "isn't " : "",
                         "the field entry for field number ", field_num)) {
