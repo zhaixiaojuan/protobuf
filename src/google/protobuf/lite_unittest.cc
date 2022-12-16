@@ -39,6 +39,7 @@
 #include <gtest/gtest.h>
 #include "google/protobuf/stubs/logging.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "google/protobuf/arena_test_util.h"
 #include "google/protobuf/io/coded_stream.h"
@@ -1169,6 +1170,14 @@ TYPED_TEST(LiteTest, DebugString) {
   // non-determinism, which should make it easier for us to change the output
   // later without breaking any code.
   EXPECT_NE(message1.DebugString(), message2.DebugString());
+}
+
+TYPED_TEST(LiteTest, AbslStringify) {
+  protobuf_unittest::TestAllTypesLite message;
+  EXPECT_TRUE(absl::StartsWith(absl::StrCat(message), "MessageLite at 0x"));
+
+  // The AbslStringify() output should be the same as the DebugString() output
+  EXPECT_EQ(absl::StrCat(message), message.DebugString());
 }
 
 TYPED_TEST(LiteTest, EnumValueToName) {
