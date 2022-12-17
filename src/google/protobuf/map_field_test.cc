@@ -28,7 +28,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <map>
 #include <memory>
 
 #include "google/protobuf/arena.h"
@@ -143,7 +142,7 @@ class MapFieldBasePrimitiveTest : public testing::TestWithParam<bool> {
   const Descriptor* map_descriptor_;
   const FieldDescriptor* key_descriptor_;
   const FieldDescriptor* value_descriptor_;
-  std::map<int32_t, int32_t>
+  absl::flat_hash_map<int32_t, int32_t>
       initial_value_map_;  // copy of initial values inserted
 };
 

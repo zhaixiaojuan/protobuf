@@ -34,6 +34,8 @@
 
 #include "google/protobuf/compiler/importer.h"
 
+#include "absl/strings/str_cat.h"
+
 #ifdef _MSC_VER
 #include <direct.h>
 #else
@@ -284,7 +286,8 @@ static std::string CanonicalizePath(absl::string_view path) {
   std::string path_str;
   if (absl::StartsWith(path, "\\\\")) {
     // Avoid converting two leading backslashes.
-    path_str = "\\\\" + absl::StrReplaceAll(path.substr(2), {{"\\", "/"}});
+    path_str = absl::StrCat("\\\\",
+                            absl::StrReplaceAll(path.substr(2), {{"\\", "/"}}));
   } else {
     path_str = absl::StrReplaceAll(path, {{"\\", "/"}});
   }
@@ -475,7 +478,7 @@ io::ZeroCopyInputStream* DiskSourceTree::OpenVirtualFile(
       if (errno == EACCES) {
         // The file exists but is not readable.
         last_error_message_ =
-            "Read access is denied for file: " + temp_disk_file;
+            absl::StrCat("Read access is denied for file: ", temp_disk_file);
         return nullptr;
       }
     }

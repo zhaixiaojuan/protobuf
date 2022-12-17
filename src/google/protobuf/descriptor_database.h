@@ -37,14 +37,14 @@
 #ifndef GOOGLE_PROTOBUF_DESCRIPTOR_DATABASE_H__
 #define GOOGLE_PROTOBUF_DESCRIPTOR_DATABASE_H__
 
-
-#include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/port.h"
+
 
 // Must be included last.
 #include "google/protobuf/port_def.inc"
@@ -217,9 +217,9 @@ class PROTOBUF_EXPORT SimpleDescriptorDatabase : public DescriptorDatabase {
     void FindAllFileNames(std::vector<std::string>* output);
 
    private:
-    std::map<std::string, Value> by_name_;
-    std::map<std::string, Value> by_symbol_;
-    std::map<std::pair<std::string, int>, Value> by_extension_;
+    absl::btree_map<std::string, Value> by_name_;
+    absl::btree_map<std::string, Value> by_symbol_;
+    absl::btree_map<std::pair<std::string, int>, Value> by_extension_;
 
     // Invariant:  The by_symbol_ map does not contain any symbols which are
     // prefixes of other symbols in the map.  For example, "foo.bar" is a
