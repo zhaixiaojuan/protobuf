@@ -789,6 +789,10 @@ CommandLineInterface::MemoryOutputStream::~MemoryOutputStream() {
   // Make sure all data has been written.
   inner_.reset();
 
+  // DO NOT SUBMIT
+  std::cout << "## " << filename_;
+  std::cout << data_;
+
   // Insert into the directory.
   auto pair = directory_->files_.insert({filename_, ""});
   auto it = pair.first;
