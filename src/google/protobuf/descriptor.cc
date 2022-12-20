@@ -58,6 +58,7 @@
 #include "google/protobuf/stubs/logging.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/escaping.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
@@ -1136,7 +1137,7 @@ class FileDescriptorTables {
 
   // These add items to the corresponding tables.  They return false if
   // the key already exists in the table.
-  bool AddAliasUnderParent(const void* parent, const std::string& name,
+  bool AddAliasUnderParent(const void* parent, absl::string_view name,
                            Symbol symbol);
   bool AddFieldByNumber(FieldDescriptor* field);
   bool AddEnumValueByNumber(EnumValueDescriptor* value);
@@ -1702,7 +1703,7 @@ bool DescriptorPool::Tables::AddSymbol(const std::string& full_name,
 }
 
 bool FileDescriptorTables::AddAliasUnderParent(const void* parent,
-                                               const std::string& name,
+                                               absl::string_view name,
                                                Symbol symbol) {
   GOOGLE_ABSL_DCHECK_EQ(name, symbol.parent_name_key().second);
   GOOGLE_ABSL_DCHECK_EQ(parent, symbol.parent_name_key().first);
@@ -2504,7 +2505,7 @@ std::string FieldDescriptor::DefaultValueAsString(
       return default_value_bool() ? "true" : "false";
     case CPPTYPE_STRING:
       if (quote_string_type) {
-        return "\"" + absl::CEscape(default_value_string()) + "\"";
+        return absl::StrCat("\"", absl::CEscape(default_value_string()), "\"");
       } else {
         if (type() == TYPE_BYTES) {
           return absl::CEscape(default_value_string());
@@ -2811,11 +2812,11 @@ bool RetrieveOptionsAssumingRightPool(
       }
       std::string name;
       if (field->is_extension()) {
-        name = "(." + field->full_name() + ")";
+        name = absl::StrCat("(.", field->full_name(), ")");
       } else {
         name = field->name();
       }
-      option_entries->push_back(name + " = " + fieldval);
+      option_entries->push_back(absl::StrCat(name, " = ", fieldval));
     }
   }
   return !option_entries->empty();
@@ -2908,18 +2909,17 @@ class SourceLocationCommentPrinter {
       // Detached leading comments.
       for (const std::string& leading_detached_comment :
            source_loc_.leading_detached_comments) {
-        *output += FormatComment(leading_detached_comment);
-        *output += "\n";
+        absl::StrAppend(output, FormatComment(leading_detached_comment), "\n");
       }
       // Attached leading comments.
       if (!source_loc_.leading_comments.empty()) {
-        *output += FormatComment(source_loc_.leading_comments);
+        absl::StrAppend(output, FormatComment(source_loc_.leading_comments));
       }
     }
   }
   void AddPostComment(std::string* output) {
     if (have_source_loc_ && source_loc_.trailing_comments.size() > 0) {
-      *output += FormatComment(source_loc_.trailing_comments);
+      absl::StrAppend(output, FormatComment(source_loc_.trailing_comments));
     }
   }
 
@@ -3185,9 +3185,9 @@ std::string FieldDescriptor::DebugStringWithOptions(
 std::string FieldDescriptor::FieldTypeNameDebugString() const {
   switch (type()) {
     case TYPE_MESSAGE:
-      return "." + message_type()->full_name();
+      return absl::StrCat(".", message_type()->full_name());
     case TYPE_ENUM:
-      return "." + enum_type()->full_name();
+      return absl::StrCat(".", enum_type()->full_name());
     default:
       return kTypeToName[type()];
   }
@@ -3745,7 +3745,7 @@ class DescriptorBuilder {
   void AddNotDefinedError(
       const std::string& element_name, const Message& descriptor,
       DescriptorPool::ErrorCollector::ErrorLocation location,
-      const std::string& undefined_symbol);
+      absl::string_view undefined_symbol);
 
   void AddWarning(const std::string& element_name, const Message& descriptor,
                   DescriptorPool::ErrorCollector::ErrorLocation location,
@@ -3808,7 +3808,7 @@ class DescriptorBuilder {
   // true if successful or false if failed, though most callers can ignore
   // the return value since an error has already been recorded.
   bool AddSymbol(const std::string& full_name, const void* parent,
-                 const std::string& name, const Message& proto, Symbol symbol);
+                 absl::string_view name, const Message& proto, Symbol symbol);
 
   // Like AddSymbol(), but succeeds if the symbol is already defined as long
   // as the existing definition is also a package (because it's OK to define
@@ -4204,31 +4204,32 @@ PROTOBUF_NOINLINE void DescriptorBuilder::AddError(
 PROTOBUF_NOINLINE void DescriptorBuilder::AddNotDefinedError(
     const std::string& element_name, const Message& descriptor,
     DescriptorPool::ErrorCollector::ErrorLocation location,
-    const std::string& undefined_symbol) {
+    absl::string_view undefined_symbol) {
   if (possible_undeclared_dependency_ == nullptr &&
       undefine_resolved_name_.empty()) {
     AddError(element_name, descriptor, location,
-             "\"" + undefined_symbol + "\" is not defined.");
+             absl::StrCat("\"", undefined_symbol, "\" is not defined."));
   } else {
     if (possible_undeclared_dependency_ != nullptr) {
       AddError(element_name, descriptor, location,
-               "\"" + possible_undeclared_dependency_name_ +
-                   "\" seems to be defined in \"" +
-                   possible_undeclared_dependency_->name() +
-                   "\", which is not "
-                   "imported by \"" +
-                   filename_ +
-                   "\".  To use it here, please "
-                   "add the necessary import.");
+               absl::StrCat("\"", possible_undeclared_dependency_name_,
+                            "\" seems to be defined in \"",
+                            possible_undeclared_dependency_->name(),
+                            "\", which is not "
+                            "imported by \"",
+                            filename_,
+                            "\".  To use it here, please "
+                            "add the necessary import."));
     }
     if (!undefine_resolved_name_.empty()) {
       AddError(element_name, descriptor, location,
-               "\"" + undefined_symbol + "\" is resolved to \"" +
-                   undefine_resolved_name_ +
+               absl::StrCat(
+                   "\"", undefined_symbol, "\" is resolved to \"",
+                   undefine_resolved_name_,
                    "\", which is not defined. "
                    "The innermost scope is searched first in name resolution. "
-                   "Consider using a leading '.'(i.e., \"." +
-                   undefined_symbol + "\") to start from the outermost scope.");
+                   "Consider using a leading '.'(i.e., \".",
+                   undefined_symbol, "\") to start from the outermost scope."));
     }
   }
 }
@@ -4527,9 +4528,10 @@ Symbol DescriptorPool::NewPlaceholderWithMutexHeld(
 
     // Note that enum value names are siblings of their type, not children.
     placeholder_value->all_names_ = alloc.AllocateStrings(
-        "PLACEHOLDER_VALUE", placeholder_package->empty()
-                                 ? "PLACEHOLDER_VALUE"
-                                 : *placeholder_package + ".PLACEHOLDER_VALUE");
+        "PLACEHOLDER_VALUE",
+        placeholder_package->empty()
+            ? "PLACEHOLDER_VALUE"
+            : absl::StrCat(*placeholder_package, ".PLACEHOLDER_VALUE"));
 
     placeholder_value->number_ = 0;
     placeholder_value->type_ = placeholder_enum;
@@ -4600,15 +4602,15 @@ FileDescriptor* DescriptorPool::NewPlaceholderFileWithMutexHeld(
 }
 
 bool DescriptorBuilder::AddSymbol(const std::string& full_name,
-                                  const void* parent, const std::string& name,
+                                  const void* parent, absl::string_view name,
                                   const Message& proto, Symbol symbol) {
   // If the caller passed nullptr for the parent, the symbol is at file scope.
   // Use its file as the parent instead.
   if (parent == nullptr) parent = file_;
 
-  if (full_name.find('\0') != std::string::npos) {
+  if (absl::StrContains(full_name, '\0')) {
     AddError(full_name, proto, DescriptorPool::ErrorCollector::NAME,
-             "\"" + full_name + "\" contains null character.");
+             absl::StrCat("\"", full_name, "\" contains null character."));
     return false;
   }
   if (tables_->AddSymbol(full_name, symbol)) {
@@ -4630,12 +4632,12 @@ bool DescriptorBuilder::AddSymbol(const std::string& full_name,
       std::string::size_type dot_pos = full_name.find_last_of('.');
       if (dot_pos == std::string::npos) {
         AddError(full_name, proto, DescriptorPool::ErrorCollector::NAME,
-                 "\"" + full_name + "\" is already defined.");
+                 absl::StrCat("\"", full_name, "\" is already defined."));
       } else {
         AddError(full_name, proto, DescriptorPool::ErrorCollector::NAME,
-                 "\"" + full_name.substr(dot_pos + 1) +
-                     "\" is already defined in \"" +
-                     full_name.substr(0, dot_pos) + "\".");
+                 absl::StrCat("\"", full_name.substr(dot_pos + 1),
+                              "\" is already defined in \"",
+                              full_name.substr(0, dot_pos) + "\"."));
       }
     } else {
       // Symbol seems to have been defined in a different file.
@@ -6471,9 +6473,9 @@ void DescriptorBuilder::CrossLinkField(FieldDescriptor* field,
                          proto.extendee());
       return;
     } else if (extendee.type() != Symbol::MESSAGE) {
-      AddError(field->full_name(), proto,
-               DescriptorPool::ErrorCollector::EXTENDEE,
-               "\"" + proto.extendee() + "\" is not a message type.");
+      AddError(
+          field->full_name(), proto, DescriptorPool::ErrorCollector::EXTENDEE,
+          absl::StrCat("\"", proto.extendee(), "\" is not a message type."));
       return;
     }
     field->containing_type_ = extendee.descriptor();

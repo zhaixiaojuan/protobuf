@@ -61,14 +61,14 @@ using std::string;
 
 namespace {
 
-static const char kTypeUrlPrefix[] = "type.googleapis.com";
+static constexpr absl::string_view kTypeUrlPrefix = "type.googleapis.com";
 
 // The number of repetitions to use for performance tests.
 // Corresponds approx to 500KB wireformat bytes.
 static const size_t kPerformanceRepeatCount = 50000;
 
 static string GetTypeUrl(const Descriptor* message) {
-  return string(kTypeUrlPrefix) + "/" + message->full_name();
+  return absl::StrCat(kTypeUrlPrefix, "/", message->full_name());
 }
 
 /* Routines for building arbitrary protos *************************************/
@@ -723,47 +723,54 @@ void BinaryAndJsonConformanceSuite::TestPrematureEOFForType(
       static_cast<WireFormatLite::FieldType>(type));
   const string& incomplete = incompletes[wire_type];
   const string type_name =
-      UpperCase(string(".") + FieldDescriptor::TypeName(type));
+      UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(type)));
 
   ExpectParseFailureForProto(
       tag(field->number(), wire_type),
-      "PrematureEofBeforeKnownNonRepeatedValue" + type_name, REQUIRED);
+      absl::StrCat("PrematureEofBeforeKnownNonRepeatedValue", type_name),
+      REQUIRED);
 
   ExpectParseFailureForProto(
       tag(rep_field->number(), wire_type),
-      "PrematureEofBeforeKnownRepeatedValue" + type_name, REQUIRED);
+      absl::StrCat("PrematureEofBeforeKnownRepeatedValue", type_name),
+      REQUIRED);
 
   ExpectParseFailureForProto(
       tag(UNKNOWN_FIELD, wire_type),
-      "PrematureEofBeforeUnknownValue" + type_name, REQUIRED);
+      absl::StrCat("PrematureEofBeforeUnknownValue", type_name), REQUIRED);
 
   ExpectParseFailureForProto(
-      cat( tag(field->number(), wire_type), incomplete ),
-      "PrematureEofInsideKnownNonRepeatedValue" + type_name, REQUIRED);
+      cat(tag(field->number(), wire_type), incomplete),
+      absl::StrCat("PrematureEofInsideKnownNonRepeatedValue", type_name),
+      REQUIRED);
 
   ExpectParseFailureForProto(
-      cat( tag(rep_field->number(), wire_type), incomplete ),
-      "PrematureEofInsideKnownRepeatedValue" + type_name, REQUIRED);
+      cat(tag(rep_field->number(), wire_type), incomplete),
+      absl::StrCat("PrematureEofInsideKnownRepeatedValue", type_name),
+      REQUIRED);
 
   ExpectParseFailureForProto(
-      cat( tag(UNKNOWN_FIELD, wire_type), incomplete ),
-      "PrematureEofInsideUnknownValue" + type_name, REQUIRED);
+      cat(tag(UNKNOWN_FIELD, wire_type), incomplete),
+      absl::StrCat("PrematureEofInsideUnknownValue", type_name), REQUIRED);
 
   if (wire_type == WireFormatLite::WIRETYPE_LENGTH_DELIMITED) {
     ExpectParseFailureForProto(
-        cat( tag(field->number(), wire_type), varint(1) ),
-        "PrematureEofInDelimitedDataForKnownNonRepeatedValue" + type_name,
+        cat(tag(field->number(), wire_type), varint(1)),
+        absl::StrCat("PrematureEofInDelimitedDataForKnownNonRepeatedValue",
+                     type_name),
         REQUIRED);
 
     ExpectParseFailureForProto(
-        cat( tag(rep_field->number(), wire_type), varint(1) ),
-        "PrematureEofInDelimitedDataForKnownRepeatedValue" + type_name,
+        cat(tag(rep_field->number(), wire_type), varint(1)),
+        absl::StrCat("PrematureEofInDelimitedDataForKnownRepeatedValue",
+                     type_name),
         REQUIRED);
 
     // EOF in the middle of delimited data for unknown value.
     ExpectParseFailureForProto(
-        cat( tag(UNKNOWN_FIELD, wire_type), varint(1) ),
-        "PrematureEofInDelimitedDataForUnknownValue" + type_name, REQUIRED);
+        cat(tag(UNKNOWN_FIELD, wire_type), varint(1)),
+        absl::StrCat("PrematureEofInDelimitedDataForUnknownValue", type_name),
+        REQUIRED);
 
     if (type == FieldDescriptor::TYPE_MESSAGE) {
       // Submessage ends in the middle of a value.
@@ -771,10 +778,9 @@ void BinaryAndJsonConformanceSuite::TestPrematureEOFForType(
           cat( tag(WireFormatLite::TYPE_INT32, WireFormatLite::WIRETYPE_VARINT),
                 incompletes[WireFormatLite::WIRETYPE_VARINT] );
       ExpectHardParseFailureForProto(
-          cat( tag(field->number(), WireFormatLite::WIRETYPE_LENGTH_DELIMITED),
-               varint(incomplete_submsg.size()),
-               incomplete_submsg ),
-          "PrematureEofInSubmessageValue" + type_name, REQUIRED);
+          cat(tag(field->number(), WireFormatLite::WIRETYPE_LENGTH_DELIMITED),
+              varint(incomplete_submsg.size()), incomplete_submsg),
+          absl::StrCat("PrematureEofInSubmessageValue", type_name), REQUIRED);
     }
   } else if (type != FieldDescriptor::TYPE_GROUP) {
     // Non-delimited, non-group: eligible for packing.
@@ -783,13 +789,13 @@ void BinaryAndJsonConformanceSuite::TestPrematureEOFForType(
     ExpectHardParseFailureForProto(
         cat(tag(rep_field->number(), WireFormatLite::WIRETYPE_LENGTH_DELIMITED),
             varint(incomplete.size()), incomplete),
-        "PrematureEofInPackedFieldValue" + type_name, REQUIRED);
+        absl::StrCat("PrematureEofInPackedFieldValue", type_name), REQUIRED);
 
     // EOF in the middle of packed region.
     ExpectParseFailureForProto(
         cat(tag(rep_field->number(), WireFormatLite::WIRETYPE_LENGTH_DELIMITED),
             varint(1)),
-        "PrematureEofInPackedField" + type_name, REQUIRED);
+        absl::StrCat("PrematureEofInPackedField", type_name), REQUIRED);
   }
 }
 
@@ -798,7 +804,7 @@ void BinaryAndJsonConformanceSuite::TestValidDataForType(
     std::vector<std::pair<std::string, std::string>> values) {
   for (int is_proto3 = 0; is_proto3 < 2; is_proto3++) {
     const string type_name =
-        UpperCase(string(".") + FieldDescriptor::TypeName(type));
+        UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(type)));
     WireFormatLite::WireType wire_type = WireFormatLite::WireTypeForFieldType(
         static_cast<WireFormatLite::FieldType>(type));
     const FieldDescriptor* field = GetFieldForType(type, false, is_proto3);
@@ -840,8 +846,8 @@ void BinaryAndJsonConformanceSuite::TestValidDataForType(
       string text;
       TextFormat::PrintToString(*test_message, &text);
 
-      RunValidProtobufTest("RepeatedScalarSelectsLast" + type_name, REQUIRED,
-                           proto, text, is_proto3);
+      RunValidProtobufTest(absl::StrCat("RepeatedScalarSelectsLast", type_name),
+                           REQUIRED, proto, text, is_proto3);
     }
 
     // Test repeated fields.
@@ -993,16 +999,17 @@ void BinaryAndJsonConformanceSuite::TestValidDataForRepeatedScalarMessage() {
     }
 
     RunValidProtobufTest("RepeatedScalarMessageMerge", REQUIRED, proto,
-                         field->name() + ": " + expected, is_proto3);
+                         absl::StrCat(field->name(), ": ", expected),
+                         is_proto3);
   }
 }
 
 void BinaryAndJsonConformanceSuite::TestValidDataForMapType(
     FieldDescriptor::Type key_type, FieldDescriptor::Type value_type) {
   const string key_type_name =
-      UpperCase(string(".") + FieldDescriptor::TypeName(key_type));
+      UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(key_type)));
   const string value_type_name =
-      UpperCase(string(".") + FieldDescriptor::TypeName(value_type));
+      UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(value_type)));
   WireFormatLite::WireType key_wire_type = WireFormatLite::WireTypeForFieldType(
       static_cast<WireFormatLite::FieldType>(key_type));
   WireFormatLite::WireType value_wire_type =
@@ -1167,7 +1174,7 @@ void BinaryAndJsonConformanceSuite::TestOverwriteMessageValueMap() {
 void BinaryAndJsonConformanceSuite::TestValidDataForOneofType(
     FieldDescriptor::Type type) {
   const string type_name =
-      UpperCase(string(".") + FieldDescriptor::TypeName(type));
+      UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(type)));
   WireFormatLite::WireType wire_type = WireFormatLite::WireTypeForFieldType(
       static_cast<WireFormatLite::FieldType>(type));
 
@@ -1382,7 +1389,7 @@ void BinaryAndJsonConformanceSuite::
     TestBinaryPerformanceMergeMessageWithRepeatedFieldForType(
         FieldDescriptor::Type type) {
   const string type_name =
-      UpperCase(string(".") + FieldDescriptor::TypeName(type));
+      UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(type)));
   for (int is_proto3 = 0; is_proto3 < 2; is_proto3++) {
     int field_number =
         GetFieldForType(type, true, is_proto3, Packed::kFalse)->number();
@@ -1392,7 +1399,9 @@ void BinaryAndJsonConformanceSuite::
         GetNonDefaultValue(type));
 
     RunBinaryPerformanceMergeMessageWithField(
-        "TestBinaryPerformanceMergeMessageWithRepeatedFieldForType" + type_name,
+        absl::StrCat(
+            "TestBinaryPerformanceMergeMessageWithRepeatedFieldForType",
+            type_name),
         rep_field_proto, is_proto3);
   }
 }
@@ -1401,14 +1410,15 @@ void BinaryAndJsonConformanceSuite::
     TestBinaryPerformanceMergeMessageWithUnknownFieldForType(
         FieldDescriptor::Type type) {
   const string type_name =
-      UpperCase(string(".") + FieldDescriptor::TypeName(type));
+      UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(type)));
   string unknown_field_proto =
       cat(tag(UNKNOWN_FIELD, WireFormatLite::WireTypeForFieldType(
                                  static_cast<WireFormatLite::FieldType>(type))),
           GetNonDefaultValue(type));
   for (int is_proto3 = 0; is_proto3 < 2; is_proto3++) {
     RunBinaryPerformanceMergeMessageWithField(
-        "TestBinaryPerformanceMergeMessageWithUnknownFieldForType" + type_name,
+        absl::StrCat("TestBinaryPerformanceMergeMessageWithUnknownFieldForType",
+                     type_name),
         unknown_field_proto, is_proto3);
   }
 }
@@ -1724,30 +1734,32 @@ void BinaryAndJsonConformanceSuite::
     TestJsonPerformanceMergeMessageWithRepeatedFieldForType(
         FieldDescriptor::Type type, string field_value) {
   const string type_name =
-      UpperCase(string(".") + FieldDescriptor::TypeName(type));
+      UpperCase(absl::StrCat(".", FieldDescriptor::TypeName(type)));
   for (int is_proto3 = 0; is_proto3 < 2; is_proto3++) {
     const FieldDescriptor* field =
         GetFieldForType(type, true, is_proto3, Packed::kFalse);
     string field_name = field->name();
 
-    string message_field = "\"" + field_name + "\": [" + field_value + "]";
+    string message_field =
+        absl::StrCat("\"", field_name, "\": [", field_value, "]");
     string recursive_message =
-        "\"recursive_message\": { " + message_field + "}";
-    string input = "{";
-    input.append(recursive_message);
+        absl::StrCat("\"recursive_message\": { ", message_field, "}");
+    string input = absl::StrCat("{", recursive_message);
     for (size_t i = 1; i < kPerformanceRepeatCount; i++) {
-      input.append("," + recursive_message);
+      absl::StrAppend(&input, ",", recursive_message);
     }
-    input.append("}");
+    absl::StrAppend(&input, "}");
 
-    string textproto_message_field = field_name + ": " + field_value;
+    string textproto_message_field =
+        absl::StrCat(field_name, ": ", field_value);
     string expected_textproto = "recursive_message { ";
     for (size_t i = 0; i < kPerformanceRepeatCount; i++) {
-      expected_textproto.append(textproto_message_field + " ");
+      absl::StrAppend(&expected_textproto, textproto_message_field, " ");
     }
-    expected_textproto.append("}");
+    absl::StrAppend(&expected_textproto, "}");
     RunValidJsonTest(
-        "TestJsonPerformanceMergeMessageWithRepeatedFieldForType" + type_name,
+        absl::StrCat("TestJsonPerformanceMergeMessageWithRepeatedFieldForType",
+                     type_name),
         RECOMMENDED, input, expected_textproto, is_proto3);
   }
 }

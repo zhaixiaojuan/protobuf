@@ -50,6 +50,8 @@
 #include <chrono>
 #include <thread>
 
+#include "absl/strings/str_cat.h"
+
 #ifndef _WIN32
 #include <sys/socket.h>
 #include <unistd.h>
@@ -1447,7 +1449,8 @@ TEST_F(IoTest, CordOutputBufferEndsAtSizeHint) {
 
 // To test files, we create a temporary file, write, read, truncate, repeat.
 TEST_F(IoTest, FileIo) {
-  std::string filename = TestTempDir() + "/zero_copy_stream_test_file";
+  std::string filename =
+      absl::StrCat(TestTempDir(), "/zero_copy_stream_test_file");
 
   for (int i = 0; i < kBlockSizeCount; i++) {
     for (int j = 0; j < kBlockSizeCount; j++) {
@@ -1544,7 +1547,8 @@ TEST_F(IoTest, BlockingFileIoWithTimeout) {
 
 #if HAVE_ZLIB
 TEST_F(IoTest, GzipFileIo) {
-  std::string filename = TestTempDir() + "/zero_copy_stream_test_file";
+  std::string filename =
+      absl::StrCat(TestTempDir(), "/zero_copy_stream_test_file");
 
   for (int i = 0; i < kBlockSizeCount; i++) {
     for (int j = 0; j < kBlockSizeCount; j++) {
