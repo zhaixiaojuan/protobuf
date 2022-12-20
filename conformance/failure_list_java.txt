@@ -35,6 +35,8 @@ Recommended.Proto3.JsonInput.StringFieldUnpairedLowSurrogate
 Recommended.Proto3.JsonInput.Uint32MapFieldKeyNotQuoted
 Recommended.Proto3.JsonInput.Uint64MapFieldKeyNotQuoted
 Recommended.Proto2.JsonInput.FieldNameExtension.Validator
+Recommended.ValueRejectInfNumberValue.JsonOutput
+Recommended.ValueRejectNanNumberValue.JsonOutput
 Required.Proto3.JsonInput.EnumFieldNotQuoted
 Required.Proto3.JsonInput.Int32FieldLeadingZero
 Required.Proto3.JsonInput.Int32FieldNegativeWithLeadingZero

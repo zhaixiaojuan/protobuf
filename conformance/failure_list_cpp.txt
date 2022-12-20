@@ -34,3 +34,5 @@ Recommended.Proto3.JsonInput.TrailingCommaInAnObjectWithNewlines
 Recommended.Proto3.JsonInput.TrailingCommaInAnObjectWithSpace
 Recommended.Proto3.JsonInput.TrailingCommaInAnObjectWithSpaceCommaSpace
 Recommended.Proto2.JsonInput.FieldNameExtension.Validator
+Recommended.ValueRejectInfNumberValue.JsonOutput
+Recommended.ValueRejectNanNumberValue.JsonOutput
